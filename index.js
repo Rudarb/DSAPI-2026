@@ -6,6 +6,41 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+function autenticacao(req, res, next) {
+    const perm = req.headers['permissao']; //'cliente' ou 'admin'
+    const usuarioId = req.headers['usuario-id']; // 3 (admin nao precisa)
+
+    if (req.path === '/clientes' && req.method === 'POST') {
+        return next();
+    }
+
+    if (!perm) {
+        return res.status(401).json({ erro: 'Não autenticado.(cliente ou admin).' });
+    }
+
+    if (perm.toLowerCase() === 'cliente' && !usuarioId) {
+        return res.status(401).json({ erro: 'Clientes precisam enviar o header "usuario-id" com o seu ID.' });
+    }
+
+    req.usuario = {
+        id: usuarioId ? parseInt(usuarioId) : null,
+        perm: perm.toLowerCase()
+    };
+
+    next();
+}
+
+function permitir(...perfispermitidos) {
+    return (req, res, next) => {
+        if (!req.usuario || !perfispermitidos.includes(req.usuario.perm)) {
+            return res.status(403).json({ erro: 'Acesso negado. Você não tem permissão para esta operação.' });
+        }
+        next();
+    };
+}
+
+app.use(autenticacao);
+
 // GET: receber dados
 // POST: enviar dados
 // PUT: atualizar dados
@@ -30,7 +65,7 @@ app.post('/clientes', async (req, res) => {
     }
 });
 
-app.get('/produtos', async (req, res) => {
+app.get('/produtos',permitir('cliente', 'admin'), async (req, res) => {
     try {
         const [produtos] = await db.query('SELECT * FROM produtos WHERE quantidade > 0');
         res.status(200).json(produtos);
@@ -39,7 +74,7 @@ app.get('/produtos', async (req, res) => {
     }
 });
 
-app.post('/produtos', async (req, res) => {
+app.post('/produtos', permitir('admin'), async (req, res) => {
     try {
         const { nome, preco, quantidade, categoria_id } = req.body;
         
@@ -53,7 +88,7 @@ app.post('/produtos', async (req, res) => {
     }
 });
 
-app.put('/produtos/:id', async (req, res) => {
+app.put('/produtos/:id', permitir('admin'), async (req, res) => {
     try {
         const { id } = req.params;
         const { nome, preco, quantidade, categoria_id } = req.body;
@@ -72,7 +107,7 @@ app.put('/produtos/:id', async (req, res) => {
     }
 });
 
-app.delete('/produtos/:id', async (req, res) => {
+app.delete('/produtos/:id', permitir('admin'), async (req, res) => {
     try {
         const { id } = req.params;
         const [result] = await db.query('DELETE FROM produtos WHERE id = ?', [id]);
@@ -86,10 +121,11 @@ app.delete('/produtos/:id', async (req, res) => {
     }
 });
 
-app.post('/pedidos', async (req, res) => {
+app.post('/pedidos', permitir('cliente', 'admin'), async (req, res) => {
     const connection = await db.getConnection();
     try {
-        const { cliente_id, endereco, itens } = req.body; 
+        const { endereco, itens } = req.body;
+        const cliente_id = req.usuario.id;
 
         if (!cliente_id || !endereco || !itens || itens.length === 0) {
             return res.status(400).json({ erro: 'Dados do pedido incompletos.' });
@@ -137,7 +173,7 @@ app.post('/pedidos', async (req, res) => {
 });
 
 
-app.get('/pedidos', async (req, res) => {
+app.get('/pedidos', permitir('cliente', 'admin'), async (req, res) => {
     try {
         const { cliente_id } = req.query;
         let query = `
@@ -149,9 +185,14 @@ app.get('/pedidos', async (req, res) => {
         `;
         let params = [];
 
-        if (cliente_id) {
+      if (req.usuario.role === 'cliente') {
             query += ' WHERE p.cliente_id = ?';
-            params.push(cliente_id);
+            params.push(req.usuario.id);
+        }
+
+        else if (req.usuario.role === 'admin' && req.query.cliente_id) {
+            query += ' WHERE p.cliente_id = ?';
+            params.push(req.query.cliente_id);
         }
 
         const [resultados] = await db.query(query, params);
