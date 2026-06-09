@@ -13,6 +13,7 @@ CREATE TABLE cidades (
     nome VARCHAR(50)  NOT NULL,
     PRIMARY KEY (id)
 );
+INSERT INTO cidades (nome) VALUES ('São Paulo'), ('Rio de Janeiro'), ('Belo Horizonte');
 
 
 CREATE TABLE categorias (
@@ -20,6 +21,7 @@ CREATE TABLE categorias (
     nome VARCHAR(100)  NOT NULL,
     PRIMARY KEY (id)
 );
+insert into categorias (nome) values ('Eletrônicos'), ('Roupas'), ('Alimentos');
 
 
 CREATE TABLE clientes (

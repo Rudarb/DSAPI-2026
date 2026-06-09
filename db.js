@@ -6,9 +6,6 @@ const pool = mysql.createPool({
     user: 'root', 
     password: '',
     database: 'bd_dsapi',
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
 });
 
 module.exports = pool;
